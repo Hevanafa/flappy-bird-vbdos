@@ -1,7 +1,7 @@
 DECLARE SUB reverse (int_ary() AS INTEGER)
 DECLARE SUB Unshift (int_ary() AS INTEGER, item AS INTEGER)
 DECLARE SUB RenderScore ()
-DECLARE SUB FillRect (x AS INTEGER, y AS INTEGER, w AS INTEGER, y AS INTEGER, col AS INTEGER)
+DECLARE SUB FillRect (x AS INTEGER, y AS INTEGER, w AS INTEGER, h AS INTEGER, col AS INTEGER)
 DECLARE SUB DrawRegion2 (source() AS INTEGER, srcx AS INTEGER, srcy AS INTEGER, w AS INTEGER, h AS INTEGER, dx AS INTEGER, dy AS INTEGER)
 DECLARE SUB ModeTest ()
 DECLARE FUNCTION Rng (min AS INTEGER, max AS INTEGER) AS INTEGER
@@ -23,11 +23,13 @@ DEFSNG A-Z
 COMMON SHARED spr_score() AS INTEGER
 COMMON SHARED spr_bird() AS INTEGER
 
-CONST True = -1
-CONST False = 0
+CONST true = -1
+CONST false = 0
 CONST KESC = 27
 CONST KENTER = 13
 CONST KSPACE = 32
+
+RANDOMIZE TIMER
 
 LoadBMP2 spr_bird(), "BIRD.BMP"
 DIM spr_idx AS INTEGER
@@ -49,15 +51,32 @@ DIM SHARED score AS INTEGER
 ' score = 0
 score = 12345
 
-DIM gravity: gravity = .01
+DIM gravity: gravity = .005
 DIM bottom: bottom = 200 - 16
 
-DIM player_x, player_y, vy
-player_x = 25
-player_y = 1
+DIM alive: alive = true
+DIM player_x, player_y
+player_x = 0
+player_y = 100
+
+DIM SHARED vx, vy
+vx = .2
 vy = 0
 
 DIM a AS INTEGER
+
+' x, y pairs
+DIM SHARED pipes(12) AS INTEGER
+
+
+' init pipes
+FOR a = 1 TO UBOUND(pipes) STEP 2
+  pipes(a) = 100 + a * 80
+  pipes(a + 1) = Rng(25, 75)
+NEXT
+
+DIM started AS INTEGER
+started = false
 
 DIM dt, last_t
 last_t = TIMER
@@ -75,7 +94,11 @@ DO
   'NEXT
 
   ' Begin Update
-  IF player_y < bottom THEN
+  IF started THEN
+    player_x = player_x + vx
+  END IF
+
+  IF started AND player_y < bottom THEN
     player_y = player_y + vy
     vy = vy + gravity
   END IF
@@ -91,18 +114,30 @@ DO
   ' Begin Draw
   ' DrawBMP2 sprite_ex(), 0, INT(player_y)
 
-  FillRect 0, INT(player_y) - 2, 18, 16, 0
-
   ' This doesn't replace the buffer pixels
   'DEF SEG = VARSEG(buffer(32002))
   'LINE (0, INT(player_y) - 3)-(18, INT(player_y) + 15), 0, BF
   'DEF SEG
 
-  RenderScore
 
+  DIM left AS INTEGER
+  FOR a = 1 TO UBOUND(pipes) STEP 2
+    left = 100 + pipes(a) - player_x
+    LINE (left, pipes(a + 1))-(left + 24, pipes(a + 1)), 15, B
+  NEXT
+
+
+
+  ' 1/3 of screen width
+  FillRect 82, INT(player_y) - 2, 18, 16, 0
 
   ' the width parameter is half the original image
-  DrawRegion2 spr_bird(), spr_idx * 9, 0, 9, 12, 0, INT(player_y)
+  
+  DrawRegion2 spr_bird(), spr_idx * 9, 0, 9, 12, 82, INT(player_y)
+
+  LINE (100, 70)-(100, 130), 15
+
+  RenderScore
 
   Flush
 
@@ -119,8 +154,10 @@ DO
   IF ink$ <> "" THEN
     SELECT CASE ink$
     CASE CHR$(KSPACE)
-      vy = -1
-      ' Jump
+      IF NOT started THEN started = true
+
+      
+      Jump
     CASE CHR$(KESC)
       EXIT DO
     END SELECT
@@ -225,6 +262,7 @@ FUNCTION IsMagenta (col AS INTEGER) AS INTEGER
 END FUNCTION
 
 SUB Jump ()
+vy = -.6
 END SUB
 
 SUB LoadBMP2 (target() AS INTEGER, filename AS STRING)
@@ -326,9 +364,12 @@ LOOP WHILE remval > 0
 
 reverse digits()
 
+DIM left AS INTEGER
+left = 160 - (12 * UBOUND(digits)) \ 2
+
 DIM a%
 FOR a% = 1 TO UBOUND(digits)
-  DrawRegion2 spr_score(), digits(a%) * 6, 0, 6, 18, (a% - 1) * 12, 20
+  DrawRegion2 spr_score(), digits(a%) * 6, 0, 6, 18, left + (a% - 1) * 12, 20
 NEXT
 
 END SUB
