@@ -1,3 +1,6 @@
+DECLARE SUB reverse (int_ary() AS INTEGER)
+DECLARE SUB Unshift (int_ary() AS INTEGER, item AS INTEGER)
+DECLARE SUB RenderScore ()
 DECLARE SUB FillRect (x AS INTEGER, y AS INTEGER, w AS INTEGER, y AS INTEGER, col AS INTEGER)
 DECLARE SUB DrawRegion2 (source() AS INTEGER, srcx AS INTEGER, srcy AS INTEGER, w AS INTEGER, h AS INTEGER, dx AS INTEGER, dy AS INTEGER)
 DECLARE SUB ModeTest ()
@@ -11,11 +14,14 @@ DECLARE SUB pix (x AS INTEGER, y AS INTEGER, col AS INTEGER)
 DECLARE SUB LoadBMP2 (target() AS INTEGER, filename AS STRING)
 DECLARE SUB Jump ()
 
+
+
 OPTION EXPLICIT
 OPTION BASE 1
 DEFSNG A-Z
 
-COMMON SHARED sprite_ex() AS INTEGER
+COMMON SHARED spr_score() AS INTEGER
+COMMON SHARED spr_bird() AS INTEGER
 
 CONST True = -1
 CONST False = 0
@@ -23,9 +29,10 @@ CONST KESC = 27
 CONST KENTER = 13
 CONST KSPACE = 32
 
-LoadBMP2 sprite_ex(), "BIRD.BMP"
+LoadBMP2 spr_bird(), "BIRD.BMP"
 DIM spr_idx AS INTEGER
 DIM spr_tl
+LoadBMP2 spr_score(), "SCORE.BMP"
 
 DIM SHARED buffer() AS INTEGER
 InitBuffer
@@ -38,6 +45,9 @@ SCREEN 13
 'ModeTest
 'END
 
+DIM SHARED score AS INTEGER
+' score = 0
+score = 12345
 
 DIM gravity: gravity = .01
 DIM bottom: bottom = 200 - 16
@@ -52,9 +62,12 @@ DIM a AS INTEGER
 DIM dt, last_t
 last_t = TIMER
 
+LINE (0, 0)-(319, 199), 1, BF
+
 DO
   
   DIM ink$: ink$ = INKEY$
+  
 
   ' too expensive
   'FOR a = 3 TO UBOUND(buffer)
@@ -85,9 +98,11 @@ DO
   'LINE (0, INT(player_y) - 3)-(18, INT(player_y) + 15), 0, BF
   'DEF SEG
 
+  RenderScore
+
 
   ' the width parameter is half the original image
-  DrawRegion2 sprite_ex(), spr_idx * 9, 0, 9, 12, 0, INT(player_y)
+  DrawRegion2 spr_bird(), spr_idx * 9, 0, 9, 12, 0, INT(player_y)
 
   Flush
 
@@ -286,7 +301,66 @@ DEF SEG
 
 END SUB
 
+SUB RenderScore ()
+
+DIM remval AS INTEGER
+remval = score
+
+DIM digits(1) AS INTEGER
+DIM length: length = 1
+
+DO
+  
+  ' Unshift digits(), remval MOD 10
+  
+
+  digits(UBOUND(digits)) = remval MOD 10
+
+  IF remval > 9 THEN
+    length = length + 1
+    REDIM PRESERVE digits(length) AS INTEGER
+  END IF
+
+  remval = remval \ 10
+LOOP WHILE remval > 0
+
+reverse digits()
+
+DIM a%
+FOR a% = 1 TO UBOUND(digits)
+  DrawRegion2 spr_score(), digits(a%) * 6, 0, 6, 18, (a% - 1) * 12, 20
+NEXT
+
+END SUB
+
+SUB reverse (int_ary() AS INTEGER)
+
+DIM a AS INTEGER, temp AS INTEGER
+
+FOR a = 1 TO UBOUND(int_ary) \ 2
+  temp = int_ary(UBOUND(int_ary) - a + 1)
+  int_ary(UBOUND(int_ary) - a + 1) = int_ary(a)
+  int_ary(a) = temp
+NEXT
+
+END SUB
+
 FUNCTION Rng (min AS INTEGER, max AS INTEGER) AS INTEGER
 Rng = min + INT(RND * (max - min))
 END FUNCTION
+
+SUB Unshift (int_ary() AS INTEGER, item AS INTEGER)
+
+' int_ary is BYREF by default
+
+REDIM PRESERVE int_ary(UBOUND(int_ary) + 1) AS INTEGER
+
+DIM a%
+FOR a% = UBOUND(int_ary) - 1 TO 1 STEP -1
+  int_ary(a% + 1) = int_ary(a%)
+NEXT
+
+int_ary(1) = item
+
+END SUB
 
