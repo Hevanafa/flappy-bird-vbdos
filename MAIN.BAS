@@ -1,7 +1,7 @@
 DECLARE SUB RenderPlayer ()
 DECLARE SUB RenderPipes ()
 DECLARE SUB RenderGround ()
-DECLARE FUNCTION Intersects (a AS ANY, b AS ANY) AS INTEGER
+DECLARE FUNCTION Intersects (a AS ANY, B AS ANY) AS INTEGER
 DECLARE SUB reverse (int_ary() AS INTEGER)
 DECLARE SUB Unshift (int_ary() AS INTEGER, item AS INTEGER)
 DECLARE SUB RenderScore ()
@@ -33,7 +33,6 @@ TYPE rect
   w AS INTEGER
   h AS INTEGER
 END TYPE
-
 
 CONST true = -1
 CONST false = 0
@@ -73,19 +72,24 @@ DIM SHARED player_x, player_y
 player_x = 0
 player_y = 100
 
+DIM SHARED prect AS rect
+prect.y = player_y
+prect.w = 18
+prect.h = 12
+
 DIM SHARED vx, vy
 vx = .4
 vy = 0
 
 ' for iterators
-DIM a AS INTEGER, b AS INTEGER
+DIM a AS INTEGER, B AS INTEGER
 DIM left AS INTEGER, top AS INTEGER
 
 ' x, y pairs
-DIM SHARED pipes(12) AS INTEGER
+DIM SHARED pipes(4) AS rect
 
-FOR a = 1 TO UBOUND(pipes) STEP 2
-  pipes(a) = -1000
+FOR a = 1 TO UBOUND(pipes)
+  pipes(a).x = -1000
 NEXT
 
 CONST pipe_interval = 120
@@ -138,18 +142,18 @@ DO
   END IF
 
 
-  FOR a = 1 TO UBOUND(pipes) STEP 2
-    IF pipes(a) - player_x < -100 THEN
-      IF pipes(a) > 0 THEN
+  FOR a = 1 TO UBOUND(pipes)
+    IF pipes(a).x - player_x < -100 THEN
+      IF pipes(a).x > 0 THEN
         score = score + 1
         SOUND 659, 1
         SOUND 1046, 1
       END IF
 
       ' respawn pipe
-      pipes(a) = last_pipe_x + pipe_interval
-      last_pipe_x = pipes(a)
-      pipes(a + 1) = Rng(30, 92)
+      pipes(a).x = last_pipe_x + pipe_interval
+      pipes(a).y = Rng(30, 92)
+      last_pipe_x = pipes(a).x
 
       EXIT FOR
     END IF
@@ -158,9 +162,9 @@ DO
 
 
   ' Begin Draw
-  FOR a = 1 TO UBOUND(pipes) STEP 2
-    left = 100 + pipes(a) - player_x
-    LINE (left, pipes(a + 1))-(left + 24, pipes(a + 1)), 15, B
+  FOR a = 1 TO UBOUND(pipes)
+    left = 100 + pipes(a).x - player_x
+    LINE (left, pipes(a).y)-(left + 24, pipes(a).y), 15, B
   NEXT
 
   RenderPlayer
@@ -206,26 +210,26 @@ SUB DrawBMP2 (source() AS INTEGER, x%, y%)
 
 DEFINT A-Z
 
-DIM a%, b%
+DIM a%, B%
 DIM pair%, left%, px%
 
-FOR b% = 1 TO UBOUND(source, 1)
+FOR B% = 1 TO UBOUND(source, 1)
 FOR a% = 1 TO UBOUND(source, 2)
-  pair% = source(b%, a%)
+  pair% = source(B%, a%)
   left% = x% + (a% - 1) * 2
   px% = FixPixel(pair% MOD 256)
 
   IF NOT IsMagenta(px%) THEN
-    pix left%, y% + b% - 1, px%
+    pix left%, y% + B% - 1, px%
   END IF
 
   px% = FixPixel(pair% \ 256)
 
   IF NOT IsMagenta(px%) THEN
-    pix left% + 1, y% + b% - 1, px%
+    pix left% + 1, y% + B% - 1, px%
   END IF
 
-NEXT a%, b%
+NEXT a%, B%
 
 DEFSNG A-Z
 
@@ -235,26 +239,26 @@ SUB DrawRegion2 (source() AS INTEGER, srcx AS INTEGER, srcy AS INTEGER, w AS INT
 
 DEFINT A-Z
 
-DIM a%, b%
+DIM a%, B%
 DIM pair%, left%, px%
 
-FOR b% = 1 TO h
+FOR B% = 1 TO h
 FOR a% = 1 TO w
-  pair% = source(srcy + b%, srcx + a%)
+  pair% = source(srcy + B%, srcx + a%)
   left% = dx + (a% - 1) * 2
   px% = FixPixel(pair% MOD 256)
 
   IF NOT IsMagenta(px%) THEN
-    pix left%, dy + b% - 1, px%
+    pix left%, dy + B% - 1, px%
   END IF
 
   px% = FixPixel(pair% \ 256)
 
   IF NOT IsMagenta(px%) THEN
-    pix left% + 1, dy + b% - 1, px%
+    pix left% + 1, dy + B% - 1, px%
   END IF
 
-NEXT a%, b%
+NEXT a%, B%
 
 DEFSNG A-Z
 
@@ -262,12 +266,12 @@ END SUB
 
 SUB FillRect (x AS INTEGER, y AS INTEGER, w AS INTEGER, h AS INTEGER, col AS INTEGER)
 
-DIM a AS INTEGER, b AS INTEGER
+DIM a AS INTEGER, B AS INTEGER
 
-FOR b = 1 TO h
+FOR B = 1 TO h
 FOR a = 1 TO w
-  pix x + a - 1, y + b - 1, col
-NEXT a, b
+  pix x + a - 1, y + B - 1, col
+NEXT a, B
 
 END SUB
 
@@ -294,8 +298,8 @@ buffer(2) = 200
 
 END SUB
 
-FUNCTION Intersects (a AS rect, b AS rect) AS INTEGER
-Intersects = (b.x < a.x + a.w) AND (a.x < (b.x + b.w)) AND (b.y < a.y + a.h) AND (a.y < b.y + b.h)
+FUNCTION Intersects (a AS rect, B AS rect) AS INTEGER
+Intersects = (B.x < a.x + a.w) AND (a.x < (B.x + B.w)) AND (B.y < a.y + a.h) AND (a.y < B.y + B.h)
 END FUNCTION
 
 FUNCTION IsMagenta (col AS INTEGER) AS INTEGER
@@ -334,17 +338,17 @@ GET #1, 51, palsize
 DIM start AS LONG
 start = 54 + palsize * 4
 
-DIM a AS LONG, b AS LONG, byteidx AS LONG
+DIM a AS LONG, B AS LONG, byteidx AS LONG
 DIM pair
 
-FOR b = 0 TO h - 1
+FOR B = 0 TO h - 1
 FOR a = 1 TO w STEP 2
-  byteidx = start + (b * (w + pad)) + a
+  byteidx = start + (B * (w + pad)) + a
   GET #1, byteidx, pair
 
-  target(h - b, a \ 2 + 1) = pair
+  target(h - B, a \ 2 + 1) = pair
   
-NEXT a, b
+NEXT a, B
 
 CLOSE #1
 
@@ -355,17 +359,17 @@ END SUB
 SUB ModeTest ()
 
 ' Mode 13h test
-DIM a AS INTEGER, b AS INTEGER
+DIM a AS INTEGER, B AS INTEGER
 
-FOR b = 0 TO 15
-  LOCATE 1, b + 2
-  PRINT USING "#"; b MOD 10
-  LOCATE b + 2, 1
-  PRINT USING "#"; b MOD 10
+FOR B = 0 TO 15
+  LOCATE 1, B + 2
+  PRINT USING "#"; B MOD 10
+  LOCATE B + 2, 1
+  PRINT USING "#"; B MOD 10
 
   FOR a = 0 TO 15
-    LINE ((a + 1) * 8, (b + 1) * 8)-((a + 2) * 8, (b + 2) * 8), b * 16 + a, BF
-NEXT a, b
+    LINE ((a + 1) * 8, (B + 1) * 8)-((a + 2) * 8, (B + 2) * 8), B * 16 + a, BF
+NEXT a, B
 
 LOCATE 20, 1
 PRINT "Mode 13h Test"
@@ -395,17 +399,17 @@ END SUB
 
 SUB RenderPipes ()
 
-DIM a AS INTEGER, b AS INTEGER
+DIM a AS INTEGER, B AS INTEGER
 DIM top AS INTEGER, left AS INTEGER
 
-FOR a = 1 TO UBOUND(pipes) STEP 2
-  top = pipes(a + 1)
-  left = 100 + pipes(a) - player_x
+FOR a = 1 TO UBOUND(pipes)
+  top = pipes(a).y
+  left = 100 + pipes(a).x - player_x
 
   IF left < 320 THEN
     ' top half
-    FOR b = 0 TO top - 8 STEP 8
-      DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, b
+    FOR B = 0 TO top - 8 STEP 8
+      DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, B
     NEXT
 
     DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top - 8
@@ -414,8 +418,8 @@ FOR a = 1 TO UBOUND(pipes) STEP 2
     ' bottom half
     DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top + 70
 
-    FOR b = top + 78 TO bottom STEP 8
-      DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, b
+    FOR B = top + 78 TO bottom STEP 8
+      DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, B
     NEXT
   END IF
 NEXT
