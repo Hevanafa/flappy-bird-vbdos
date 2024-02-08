@@ -1,3 +1,4 @@
+DECLARE FUNCTION Intersects (a AS ANY, b AS ANY) AS INTEGER
 DECLARE SUB reverse (int_ary() AS INTEGER)
 DECLARE SUB Unshift (int_ary() AS INTEGER, item AS INTEGER)
 DECLARE SUB RenderScore ()
@@ -15,13 +16,21 @@ DECLARE SUB LoadBMP2 (target() AS INTEGER, filename AS STRING)
 DECLARE SUB Jump ()
 
 
-
 OPTION EXPLICIT
 OPTION BASE 1
 DEFSNG A-Z
 
 COMMON SHARED spr_score() AS INTEGER
 COMMON SHARED spr_bird() AS INTEGER
+COMMON SHARED spr_pipe() AS INTEGER
+
+TYPE rect
+  x AS INTEGER
+  y AS INTEGER
+  w AS INTEGER
+  h AS INTEGER
+END TYPE
+
 
 CONST true = -1
 CONST false = 0
@@ -34,7 +43,9 @@ RANDOMIZE TIMER
 LoadBMP2 spr_bird(), "BIRD.BMP"
 DIM spr_idx AS INTEGER
 DIM spr_tl
+
 LoadBMP2 spr_score(), "SCORE.BMP"
+LoadBMP2 spr_pipe(), "PIPE.BMP"
 
 DIM SHARED buffer() AS INTEGER
 InitBuffer
@@ -51,29 +62,28 @@ DIM SHARED score AS INTEGER
 ' score = 0
 score = 12345
 
-DIM gravity: gravity = .005
+DIM gravity: gravity = .01
 DIM bottom: bottom = 200 - 16
 
 DIM alive: alive = true
-DIM player_x, player_y
+DIM SHARED player_x, player_y
 player_x = 0
 player_y = 100
 
 DIM SHARED vx, vy
-vx = .2
+vx = .4
 vy = 0
 
-DIM a AS INTEGER
+' for iterators
+DIM a AS INTEGER, b AS INTEGER
+DIM left AS INTEGER, top AS INTEGER
 
 ' x, y pairs
 DIM SHARED pipes(12) AS INTEGER
+CONST pipe_interval = 120
+DIM last_pipe_x AS INTEGER
+last_pipe_x = 100
 
-
-' init pipes
-FOR a = 1 TO UBOUND(pipes) STEP 2
-  pipes(a) = 100 + a * 80
-  pipes(a + 1) = Rng(25, 75)
-NEXT
 
 DIM started AS INTEGER
 started = false
@@ -95,20 +105,45 @@ DO
 
   ' Begin Update
   IF started THEN
-    player_x = player_x + vx
+    IF alive THEN
+      player_x = player_x + vx
+
+      IF player_y < bottom THEN
+        player_y = player_y + vy
+        vy = vy + gravity
+      ELSE
+        alive = false
+      END IF
+    END IF
+
   END IF
 
-  IF started AND player_y < bottom THEN
-    player_y = player_y + vy
-    vy = vy + gravity
+
+  ' Update sprite
+  IF alive THEN
+    IF spr_tl > 0 THEN
+      spr_tl = spr_tl - dt
+    ELSE
+      spr_tl = .5
+      spr_idx = (spr_idx + 1) MOD 4
+    END IF
   END IF
 
-  IF spr_tl > 0 THEN
-    spr_tl = spr_tl - dt
-  ELSE
-    spr_tl = .5
-    spr_idx = (spr_idx + 1) MOD 4
-  END IF
+
+  FOR a = 1 TO UBOUND(pipes) STEP 2
+    IF pipes(a) - player_x < -20 THEN
+      ' respawn pipe
+      pipes(a) = last_pipe_x + pipe_interval
+      last_pipe_x = pipes(a)
+      pipes(a + 1) = Rng(30, 92)
+
+      score = score + 1
+      SOUND 659, 1
+      SOUND 1046, 1
+
+      EXIT FOR
+    END IF
+  NEXT
 
 
   ' Begin Draw
@@ -119,8 +154,6 @@ DO
   'LINE (0, INT(player_y) - 3)-(18, INT(player_y) + 15), 0, BF
   'DEF SEG
 
-
-  DIM left AS INTEGER
   FOR a = 1 TO UBOUND(pipes) STEP 2
     left = 100 + pipes(a) - player_x
     LINE (left, pipes(a + 1))-(left + 24, pipes(a + 1)), 15, B
@@ -135,18 +168,48 @@ DO
   
   DrawRegion2 spr_bird(), spr_idx * 9, 0, 9, 12, 82, INT(player_y)
 
-  LINE (100, 70)-(100, 130), 15
+  ' Render pipes
+  
+  FOR a = 1 TO UBOUND(pipes) STEP 2
+    top = pipes(a + 1)
+    left = 100 + pipes(a) - player_x
+
+    IF left < 320 THEN
+      ' top half
+
+      ' DrawBMP2 spr_pipe(), left, pipes(a + 1) - 16
+      FOR b = 0 TO top - 8 STEP 8
+        DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, b
+      NEXT
+      DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top - 8
+      
+
+      ' bottom half
+      DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top + 70
+
+      FOR b = top + 78 TO bottom STEP 8
+        DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, b
+      NEXT
+
+    END IF
+  NEXT
 
   RenderScore
 
   Flush
 
+
+  LINE (100, 70)-(100, 130), 15
+
+  ' player hitbox
+  LINE (82, player_y)-(100, player_y + 12), 15, B
+
   COLOR 15
   LOCATE 1, 1
-  PRINT player_y;
+  PRINT player_x; player_y;
 
-  LOCATE 2, 1
-  PRINT vy;
+  ' LOCATE 2, 1
+  ' PRINT vy;
 
   dt = TIMER - last_t
   last_t = TIMER
@@ -257,12 +320,20 @@ buffer(2) = 200
 
 END SUB
 
+FUNCTION Intersects (a AS rect, b AS rect) AS INTEGER
+Intersects = (b.x < a.x + a.w) AND (a.x < (b.x + b.w)) AND (b.y < a.y + a.h) AND (a.y < b.y + b.h)
+END FUNCTION
+
 FUNCTION IsMagenta (col AS INTEGER) AS INTEGER
   IsMagenta = col = 13
 END FUNCTION
 
 SUB Jump ()
-vy = -.6
+
+IF player_y <= 0 THEN EXIT SUB
+
+vy = -.8
+
 END SUB
 
 SUB LoadBMP2 (target() AS INTEGER, filename AS STRING)
@@ -369,7 +440,7 @@ left = 160 - (12 * UBOUND(digits)) \ 2
 
 DIM a%
 FOR a% = 1 TO UBOUND(digits)
-  DrawRegion2 spr_score(), digits(a%) * 6, 0, 6, 18, left + (a% - 1) * 12, 20
+  DrawRegion2 spr_score(), digits(a%) * 6, 0, 6, 18, left + (a% - 1) * 12, 10
 NEXT
 
 END SUB
