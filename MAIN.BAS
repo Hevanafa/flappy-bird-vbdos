@@ -1,3 +1,6 @@
+DECLARE SUB RenderPlayer ()
+DECLARE SUB RenderPipes ()
+DECLARE SUB RenderGround ()
 DECLARE FUNCTION Intersects (a AS ANY, b AS ANY) AS INTEGER
 DECLARE SUB reverse (int_ary() AS INTEGER)
 DECLARE SUB Unshift (int_ary() AS INTEGER, item AS INTEGER)
@@ -15,14 +18,14 @@ DECLARE SUB pix (x AS INTEGER, y AS INTEGER, col AS INTEGER)
 DECLARE SUB LoadBMP2 (target() AS INTEGER, filename AS STRING)
 DECLARE SUB Jump ()
 
-
 OPTION EXPLICIT
 OPTION BASE 1
 DEFSNG A-Z
 
-COMMON SHARED spr_score() AS INTEGER
 COMMON SHARED spr_bird() AS INTEGER
 COMMON SHARED spr_pipe() AS INTEGER
+COMMON SHARED spr_ground() AS INTEGER
+COMMON SHARED spr_score() AS INTEGER
 
 TYPE rect
   x AS INTEGER
@@ -41,11 +44,12 @@ CONST KSPACE = 32
 RANDOMIZE TIMER
 
 LoadBMP2 spr_bird(), "BIRD.BMP"
-DIM spr_idx AS INTEGER
+DIM SHARED spr_idx AS INTEGER
 DIM spr_tl
 
 LoadBMP2 spr_score(), "SCORE.BMP"
 LoadBMP2 spr_pipe(), "PIPE.BMP"
+LoadBMP2 spr_ground(), "GROUND.BMP"
 
 DIM SHARED buffer() AS INTEGER
 InitBuffer
@@ -59,11 +63,10 @@ SCREEN 13
 'END
 
 DIM SHARED score AS INTEGER
-' score = 0
-score = 12345
+score = 0
 
-DIM gravity: gravity = .01
-DIM bottom: bottom = 200 - 16
+CONST gravity = .01
+DIM SHARED bottom: bottom = 200 - 16
 
 DIM alive: alive = true
 DIM SHARED player_x, player_y
@@ -80,6 +83,11 @@ DIM left AS INTEGER, top AS INTEGER
 
 ' x, y pairs
 DIM SHARED pipes(12) AS INTEGER
+
+FOR a = 1 TO UBOUND(pipes) STEP 2
+  pipes(a) = -1000
+NEXT
+
 CONST pipe_interval = 120
 DIM last_pipe_x AS INTEGER
 last_pipe_x = 100
@@ -131,68 +139,34 @@ DO
 
 
   FOR a = 1 TO UBOUND(pipes) STEP 2
-    IF pipes(a) - player_x < -20 THEN
+    IF pipes(a) - player_x < -100 THEN
+      IF pipes(a) > 0 THEN
+        score = score + 1
+        SOUND 659, 1
+        SOUND 1046, 1
+      END IF
+
       ' respawn pipe
       pipes(a) = last_pipe_x + pipe_interval
       last_pipe_x = pipes(a)
       pipes(a + 1) = Rng(30, 92)
-
-      score = score + 1
-      SOUND 659, 1
-      SOUND 1046, 1
 
       EXIT FOR
     END IF
   NEXT
 
 
+
   ' Begin Draw
-  ' DrawBMP2 sprite_ex(), 0, INT(player_y)
-
-  ' This doesn't replace the buffer pixels
-  'DEF SEG = VARSEG(buffer(32002))
-  'LINE (0, INT(player_y) - 3)-(18, INT(player_y) + 15), 0, BF
-  'DEF SEG
-
   FOR a = 1 TO UBOUND(pipes) STEP 2
     left = 100 + pipes(a) - player_x
     LINE (left, pipes(a + 1))-(left + 24, pipes(a + 1)), 15, B
   NEXT
 
+  RenderPlayer
 
-
-  ' 1/3 of screen width
-  FillRect 82, INT(player_y) - 2, 18, 16, 0
-
-  ' the width parameter is half the original image
-  
-  DrawRegion2 spr_bird(), spr_idx * 9, 0, 9, 12, 82, INT(player_y)
-
-  ' Render pipes
-  
-  FOR a = 1 TO UBOUND(pipes) STEP 2
-    top = pipes(a + 1)
-    left = 100 + pipes(a) - player_x
-
-    IF left < 320 THEN
-      ' top half
-
-      ' DrawBMP2 spr_pipe(), left, pipes(a + 1) - 16
-      FOR b = 0 TO top - 8 STEP 8
-        DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, b
-      NEXT
-      DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top - 8
-      
-
-      ' bottom half
-      DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top + 70
-
-      FOR b = top + 78 TO bottom STEP 8
-        DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, b
-      NEXT
-
-    END IF
-  NEXT
+  RenderPipes
+  RenderGround
 
   RenderScore
 
@@ -407,6 +381,54 @@ IF y < 0 OR y >= 200 OR x < 0 OR x >= 320 THEN EXIT SUB
 POKE 320& * y + x + 4, col
 
 DEF SEG
+
+END SUB
+
+SUB RenderGround ()
+
+DIM a AS INTEGER
+FOR a = 0 TO 332 STEP 12
+  DrawBMP2 spr_ground(), a - player_x MOD 12, INT(bottom)
+NEXT
+
+END SUB
+
+SUB RenderPipes ()
+
+DIM a AS INTEGER, b AS INTEGER
+DIM top AS INTEGER, left AS INTEGER
+
+FOR a = 1 TO UBOUND(pipes) STEP 2
+  top = pipes(a + 1)
+  left = 100 + pipes(a) - player_x
+
+  IF left < 320 THEN
+    ' top half
+    FOR b = 0 TO top - 8 STEP 8
+      DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, b
+    NEXT
+
+    DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top - 8
+
+
+    ' bottom half
+    DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top + 70
+
+    FOR b = top + 78 TO bottom STEP 8
+      DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, b
+    NEXT
+  END IF
+NEXT
+
+END SUB
+
+SUB RenderPlayer ()
+
+' 1/3 of screen width
+FillRect 82, INT(player_y) - 2, 18, 16, 0
+
+' the width parameter is half the original image
+DrawRegion2 spr_bird(), spr_idx * 9, 0, 9, 12, 82, INT(player_y)
 
 END SUB
 
