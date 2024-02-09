@@ -26,12 +26,23 @@ COMMON SHARED spr_bird() AS INTEGER
 COMMON SHARED spr_pipe() AS INTEGER
 COMMON SHARED spr_ground() AS INTEGER
 COMMON SHARED spr_score() AS INTEGER
+' watermark
+COMMON SHARED spr_wm() AS INTEGER
 
 TYPE rect
   x AS INTEGER
   y AS INTEGER
   w AS INTEGER
   h AS INTEGER
+END TYPE
+
+TYPE pipe_pair
+  x AS INTEGER
+  y AS INTEGER
+
+  top AS rect
+  bottom AS rect
+  passed AS INTEGER
 END TYPE
 
 CONST true = -1
@@ -49,6 +60,7 @@ DIM spr_tl
 LoadBMP2 spr_score(), "SCORE.BMP"
 LoadBMP2 spr_pipe(), "PIPE.BMP"
 LoadBMP2 spr_ground(), "GROUND.BMP"
+LoadBMP2 spr_wm(), "WM.BMP"
 
 DIM SHARED buffer() AS INTEGER
 InitBuffer
@@ -64,7 +76,7 @@ SCREEN 13
 DIM SHARED score AS INTEGER
 score = 0
 
-CONST gravity = .01
+CONST gravity = .06
 DIM SHARED bottom: bottom = 200 - 16
 
 DIM alive: alive = true
@@ -73,12 +85,13 @@ player_x = 0
 player_y = 100
 
 DIM SHARED prect AS rect
+prect.x = 0
 prect.y = player_y
 prect.w = 18
 prect.h = 12
 
 DIM SHARED vx, vy
-vx = .4
+vx = 1.2
 vy = 0
 
 ' for iterators
@@ -86,11 +99,26 @@ DIM a AS INTEGER, B AS INTEGER
 DIM left AS INTEGER, top AS INTEGER
 
 ' x, y pairs
-DIM SHARED pipes(4) AS rect
+DIM SHARED pipe_pairs(4) AS pipe_pair
+'DIM SHARED pipe_starts(8) AS INTEGER
+'DIM SHARED top_pipes(4) AS rect
+'DIM SHARED bottom_pipes(4) AS rect
 
-FOR a = 1 TO UBOUND(pipes)
-  pipes(a).x = -1000
+FOR a = 1 TO UBOUND(pipe_pairs)
+  pipe_pairs(a).x = -1000
+
+  pipe_pairs(a).top.x = pipe_pairs(a).x
+  pipe_pairs(a).top.y = pipe_pairs(a).y
+  pipe_pairs(a).top.w = 24
+  pipe_pairs(a).top.h = 150
+
+  pipe_pairs(a).bottom.x = pipe_pairs(a).x
+  pipe_pairs(a).bottom.y = pipe_pairs(a).y
+  pipe_pairs(a).bottom.w = 24
+  pipe_pairs(a).bottom.h = 150
+  pipe_pairs(a).passed = true
 NEXT
+
 
 CONST pipe_interval = 120
 DIM last_pipe_x AS INTEGER
@@ -105,23 +133,21 @@ last_t = TIMER
 
 LINE (0, 0)-(319, 199), 1, BF
 
-DO
-  
-  DIM ink$: ink$ = INKEY$
-  
+DIM ink$
 
-  ' too expensive
-  'FOR a = 3 TO UBOUND(buffer)
-  '  buffer(a) = 0
-  'NEXT
+DO
+  ink$ = INKEY$
+  
 
   ' Begin Update
   IF started THEN
     IF alive THEN
       player_x = player_x + vx
+      prect.x = INT(player_x)
 
       IF player_y < bottom THEN
         player_y = player_y + vy
+        prect.y = INT(player_y)
         vy = vy + gravity
       ELSE
         alive = false
@@ -142,52 +168,71 @@ DO
   END IF
 
 
-  FOR a = 1 TO UBOUND(pipes)
-    IF pipes(a).x - player_x < -100 THEN
-      IF pipes(a).x > 0 THEN
-        score = score + 1
-        SOUND 659, 1
-        SOUND 1046, 1
-      END IF
+  ' Update pipes
+  FOR a = 1 TO UBOUND(pipe_pairs)
+    IF NOT pipe_pairs(a).passed AND pipe_pairs(a).x - player_x < -30 THEN
+      score = score + 1
+      SOUND 659, 1
+      SOUND 1046, 1
 
+      pipe_pairs(a).passed = true
+    END IF
+
+    IF Intersects(prect, pipe_pairs(a).top) THEN
+      alive = false
+      EXIT FOR
+    END IF
+
+
+    IF pipe_pairs(a).x - player_x < -100 THEN
+      'IF Intersects(prect, pipe_pairs(a).top) OR Intersects(prect, pipe_pairs(a).bottom) THEN
+      '  alive = false
+      '  EXIT FOR
+      'END IF
+
+      
       ' respawn pipe
-      pipes(a).x = last_pipe_x + pipe_interval
-      pipes(a).y = Rng(30, 92)
-      last_pipe_x = pipes(a).x
+      pipe_pairs(a).x = last_pipe_x + pipe_interval
+      pipe_pairs(a).y = Rng(30, 92)
+
+      ' respawn top & bottom pipes
+      pipe_pairs(a).top.x = pipe_pairs(a).x
+      pipe_pairs(a).top.y = pipe_pairs(a).y - pipe_pairs(a).top.h
+
+      pipe_pairs(a).bottom.x = pipe_pairs(a).x
+      pipe_pairs(a).bottom.y = pipe_pairs(a).y + 75
+
+      last_pipe_x = pipe_pairs(a).x
+      pipe_pairs(a).passed = false
 
       EXIT FOR
     END IF
   NEXT
-
+  
 
 
   ' Begin Draw
-  FOR a = 1 TO UBOUND(pipes)
-    left = 100 + pipes(a).x - player_x
-    LINE (left, pipes(a).y)-(left + 24, pipes(a).y), 15, B
-  NEXT
-
   RenderPlayer
-
   RenderPipes
   RenderGround
+
+  IF NOT started THEN
+    DrawBMP2 spr_wm(), 134, bottom - 10
+  END IF
 
   RenderScore
 
   Flush
 
 
-  LINE (100, 70)-(100, 130), 15
-
-  ' player hitbox
-  LINE (82, player_y)-(100, player_y + 12), 15, B
-
   COLOR 15
   LOCATE 1, 1
   PRINT player_x; player_y;
+  LOCATE 2, 1
+  PRINT prect.x; prect.y;
+  LOCATE 3, 1
+  PRINT "Alive? "; alive;
 
-  ' LOCATE 2, 1
-  ' PRINT vy;
 
   dt = TIMER - last_t
   last_t = TIMER
@@ -196,7 +241,6 @@ DO
     SELECT CASE ink$
     CASE CHR$(KSPACE)
       IF NOT started THEN started = true
-
       
       Jump
     CASE CHR$(KESC)
@@ -310,7 +354,8 @@ SUB Jump ()
 
 IF player_y <= 0 THEN EXIT SUB
 
-vy = -.8
+' vy = -1.2
+vy = -1.6
 
 END SUB
 
@@ -402,9 +447,9 @@ SUB RenderPipes ()
 DIM a AS INTEGER, B AS INTEGER
 DIM top AS INTEGER, left AS INTEGER
 
-FOR a = 1 TO UBOUND(pipes)
-  top = pipes(a).y
-  left = 100 + pipes(a).x - player_x
+FOR a = 1 TO UBOUND(pipe_pairs)
+  top = pipe_pairs(a).y
+  left = 82 + pipe_pairs(a).x - player_x
 
   IF left < 320 THEN
     ' top half
@@ -416,11 +461,15 @@ FOR a = 1 TO UBOUND(pipes)
 
 
     ' bottom half
-    DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, top + 70
+    DrawRegion2 spr_pipe(), 0, 0, 12, 8, left, pipe_pairs(a).bottom.y
 
-    FOR B = top + 78 TO bottom STEP 8
+    FOR B = pipe_pairs(a).bottom.y + 8 TO bottom STEP 8
       DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, B
     NEXT
+
+    ' Debug hitboxes
+    LINE (left, pipe_pairs(a).top.y)-(left + pipe_pairs(a).top.w, pipe_pairs(a).top.y + pipe_pairs(a).top.h), 15, B
+    LINE (left, pipe_pairs(a).bottom.y)-(left + pipe_pairs(a).bottom.w, pipe_pairs(a).bottom.y + pipe_pairs(a).bottom.h), 15, B
   END IF
 NEXT
 
@@ -433,6 +482,9 @@ FillRect 82, INT(player_y) - 2, 18, 16, 0
 
 ' the width parameter is half the original image
 DrawRegion2 spr_bird(), spr_idx * 9, 0, 9, 12, 82, INT(player_y)
+
+' player hitbox
+LINE (prect.x - player_x + 82, player_y)-(prect.x - player_x + prect.w + 82, player_y + 12), 15, B
 
 END SUB
 
