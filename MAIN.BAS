@@ -1,3 +1,8 @@
+DECLARE SUB SaveBestScore ()
+DECLARE SUB LoadBestScore ()
+DECLARE FUNCTION f_exists (filename AS STRING) AS INTEGER
+DECLARE FUNCTION file_exists (filename AS STRING) AS INTEGER
+DECLARE SUB KillPlayer ()
 DECLARE SUB RenderPlayer ()
 DECLARE SUB RenderPipes ()
 DECLARE SUB RenderGround ()
@@ -57,13 +62,18 @@ LoadBMP2 spr_bird(), "BIRD.BMP"
 DIM SHARED spr_idx AS INTEGER
 DIM spr_tl
 
-LoadBMP2 spr_score(), "SCORE.BMP"
+LoadBMP2 spr_score(), "SCORESM2.BMP"
 LoadBMP2 spr_pipe(), "PIPE.BMP"
 LoadBMP2 spr_ground(), "GROUND.BMP"
 LoadBMP2 spr_wm(), "WM.BMP"
 
 DIM SHARED buffer() AS INTEGER
 InitBuffer
+
+DIM last_fps_t AS DOUBLE
+last_fps_t = TIMER
+DIM last_fps AS INTEGER, fps AS INTEGER
+
 
 CLS
 
@@ -74,12 +84,17 @@ SCREEN 13
 'END
 
 DIM SHARED score AS INTEGER
-score = 0
+DIM SHARED best_score AS INTEGER
+dim shared is_best_score as integer
 
-CONST gravity = .06
+LoadBestScore
+
+CONST gravity = .1
 DIM SHARED bottom: bottom = 200 - 16
 
-DIM alive: alive = true
+DIM SHARED alive AS INTEGER
+alive = true
+
 DIM SHARED player_x, player_y
 player_x = 0
 player_y = 100
@@ -91,7 +106,7 @@ prect.w = 18
 prect.h = 12
 
 DIM SHARED vx, vy
-vx = 1.2
+vx = 1
 vy = 0
 
 ' for iterators
@@ -100,9 +115,6 @@ DIM left AS INTEGER, top AS INTEGER
 
 ' x, y pairs
 DIM SHARED pipe_pairs(4) AS pipe_pair
-'DIM SHARED pipe_starts(8) AS INTEGER
-'DIM SHARED top_pipes(4) AS rect
-'DIM SHARED bottom_pipes(4) AS rect
 
 FOR a = 1 TO UBOUND(pipe_pairs)
   pipe_pairs(a).x = -1000
@@ -120,7 +132,7 @@ FOR a = 1 TO UBOUND(pipe_pairs)
 NEXT
 
 
-CONST pipe_interval = 120
+CONST pipe_interval = 80
 DIM last_pipe_x AS INTEGER
 last_pipe_x = 100
 
@@ -145,12 +157,12 @@ DO
       player_x = player_x + vx
       prect.x = INT(player_x)
 
-      IF player_y < bottom THEN
+      IF player_y < bottom - prect.h THEN
         player_y = player_y + vy
         prect.y = INT(player_y)
         vy = vy + gravity
       ELSE
-        alive = false
+        KillPlayer
       END IF
     END IF
 
@@ -170,7 +182,7 @@ DO
 
   ' Update pipes
   FOR a = 1 TO UBOUND(pipe_pairs)
-    IF NOT pipe_pairs(a).passed AND pipe_pairs(a).x - player_x < -30 THEN
+    IF NOT pipe_pairs(a).passed AND pipe_pairs(a).x - player_x < -25 THEN
       score = score + 1
       SOUND 659, 1
       SOUND 1046, 1
@@ -178,19 +190,14 @@ DO
       pipe_pairs(a).passed = true
     END IF
 
-    IF Intersects(prect, pipe_pairs(a).top) THEN
-      alive = false
+    IF Intersects(prect, pipe_pairs(a).top) OR Intersects(prect, pipe_pairs(a).bottom) THEN
+      KillPlayer
+      
       EXIT FOR
     END IF
 
 
     IF pipe_pairs(a).x - player_x < -100 THEN
-      'IF Intersects(prect, pipe_pairs(a).top) OR Intersects(prect, pipe_pairs(a).bottom) THEN
-      '  alive = false
-      '  EXIT FOR
-      'END IF
-
-      
       ' respawn pipe
       pipe_pairs(a).x = last_pipe_x + pipe_interval
       pipe_pairs(a).y = Rng(30, 92)
@@ -230,12 +237,22 @@ DO
   PRINT player_x; player_y;
   LOCATE 2, 1
   PRINT prect.x; prect.y;
-  LOCATE 3, 1
-  PRINT "Alive? "; alive;
+  'LOCATE 3, 1
+  'PRINT "Alive? "; alive;
+  LOCATE 23, 1
+  PRINT "FPS:" + STR$(last_fps)
 
 
   dt = TIMER - last_t
   last_t = TIMER
+
+  IF TIMER - last_fps_t >= 1 THEN
+    last_fps_t = TIMER
+    last_fps = fps
+    fps = 0
+  END IF
+
+  fps = fps + 1
 
   IF ink$ <> "" THEN
     SELECT CASE ink$
@@ -333,6 +350,23 @@ SUB Flush ()
 PUT (0, 0), buffer, PSET
 END SUB
 
+FUNCTION f_exists (filename AS STRING) AS INTEGER
+
+DIM f%
+f% = FREEFILE
+OPEN filename$ FOR APPEND AS #f%
+IF LOF(f%) THEN
+  f_exists = true
+ELSE
+  f_exists = false
+END IF
+CLOSE #f%
+
+' delete empty file
+KILL filename
+
+END FUNCTION
+
 SUB InitBuffer ()
 
 ERASE buffer
@@ -354,8 +388,34 @@ SUB Jump ()
 
 IF player_y <= 0 THEN EXIT SUB
 
-' vy = -1.2
-vy = -1.6
+vy = -2.4
+
+END SUB
+
+SUB KillPlayer ()
+
+alive = false
+
+if best_score < score THEN
+  best_score = score
+  is_best_score = true
+end if
+
+SaveBestScore
+
+END SUB
+
+SUB LoadBestScore ()
+
+STATIC filename$: filename$ = "score.dat"
+
+IF NOT f_exists(filename$) THEN EXIT SUB
+
+OPEN filename$ FOR BINARY AS #1
+
+GET #1, 1, best_score
+
+CLOSE #1
 
 END SUB
 
@@ -514,11 +574,11 @@ LOOP WHILE remval > 0
 reverse digits()
 
 DIM left AS INTEGER
-left = 160 - (12 * UBOUND(digits)) \ 2
+left = 160 - (6 * UBOUND(digits)) \ 2
 
 DIM a%
 FOR a% = 1 TO UBOUND(digits)
-  DrawRegion2 spr_score(), digits(a%) * 6, 0, 6, 18, left + (a% - 1) * 12, 10
+  DrawRegion2 spr_score(), digits(a%) * 3, 0, 3, 7, left + (a% - 1) * 6, 10
 NEXT
 
 END SUB
@@ -538,6 +598,16 @@ END SUB
 FUNCTION Rng (min AS INTEGER, max AS INTEGER) AS INTEGER
 Rng = min + INT(RND * (max - min))
 END FUNCTION
+
+SUB SaveBestScore ()
+
+OPEN "score.dat" FOR BINARY AS #1
+
+PUT #1, 1, best_score
+
+CLOSE #1
+
+END SUB
 
 SUB Unshift (int_ary() AS INTEGER, item AS INTEGER)
 
