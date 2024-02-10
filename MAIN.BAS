@@ -136,12 +136,21 @@ DIM last_pipe_x AS INTEGER
 last_pipe_x = 100
 
 
-DIM started AS INTEGER
+DIM SHARED started AS INTEGER
 started = false
 
 ' for benchmarking
 DIM dt, last_t
 last_t = TIMER
+
+DIM SHARED pix_count AS INTEGER
+
+
+' for the delay at the end of the (preventing 30+ FPS)
+DIM suppress_fps AS INTEGER
+suppress_fps = true
+DIM start_t AS DOUBLE
+
 
 ' input key
 DIM ink$
@@ -149,9 +158,10 @@ DIM ink$
 ' Main game loop
 DO
   ink$ = INKEY$
-  
 
   ' Begin Update
+  pix_count = 0
+
   IF started THEN
     IF alive THEN
       player_x = player_x + vx
@@ -233,12 +243,15 @@ DO
 
 
   COLOR 15
-  LOCATE 1, 1
-  PRINT player_x; player_y;
-  LOCATE 2, 1
-  PRINT prect.x; prect.y;
+  'LOCATE 1, 1
+  'PRINT player_x; player_y;
+  'LOCATE 2, 1
+  'PRINT prect.x; prect.y;
   'LOCATE 3, 1
   'PRINT "Alive? "; alive;
+
+  LOCATE 22, 1
+  PRINT "PIX:" + STR$(pix_count)
   LOCATE 23, 1
   PRINT "FPS:" + STR$(last_fps)
 
@@ -263,6 +276,11 @@ DO
     CASE CHR$(KESC)
       EXIT DO
     END SELECT
+  END IF
+
+  IF suppress_fps THEN
+    start_t = TIMER
+    DO: LOOP UNTIL (TIMER - start_t) >= .02
   END IF
 
 LOOP
@@ -487,6 +505,7 @@ DEF SEG = VARSEG(buffer(32002))
 
 IF y < 0 OR y >= 200 OR x < 0 OR x >= 320 THEN EXIT SUB
 
+pix_count = pix_count + 1
 POKE 320& * y + x + 4, col
 
 DEF SEG
@@ -496,7 +515,8 @@ END SUB
 SUB RenderGround ()
 
 DIM a AS INTEGER
-FOR a = 0 TO 332 STEP 12
+' at first, it was 0 to 332
+FOR a = 92 TO 242 STEP 12
   DrawBMP2 spr_ground(), a - player_x MOD 12, INT(bottom)
 NEXT
 
@@ -507,11 +527,16 @@ SUB RenderPipes ()
 DIM a AS INTEGER, B AS INTEGER
 DIM top AS INTEGER, left AS INTEGER
 
+' was (left < 320)
+' max draw width: 150
+' 85 - 24 .. 235
+
 FOR a = 1 TO UBOUND(pipe_pairs)
-  top = pipe_pairs(a).y
   left = 82 + pipe_pairs(a).x - player_x
 
-  IF left < 320 THEN
+  IF 61 < left AND left < 235 THEN
+    top = pipe_pairs(a).y
+
     ' top half
     FOR B = 0 TO top - 8 STEP 8
       DrawRegion2 spr_pipe(), 0, 8, 12, 8, left, B
