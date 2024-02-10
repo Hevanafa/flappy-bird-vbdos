@@ -1,7 +1,6 @@
 DECLARE SUB SaveBestScore ()
 DECLARE SUB LoadBestScore ()
 DECLARE FUNCTION f_exists (filename AS STRING) AS INTEGER
-DECLARE FUNCTION file_exists (filename AS STRING) AS INTEGER
 DECLARE SUB KillPlayer ()
 DECLARE SUB RenderPlayer ()
 DECLARE SUB RenderPipes ()
@@ -85,11 +84,11 @@ SCREEN 13
 
 DIM SHARED score AS INTEGER
 DIM SHARED best_score AS INTEGER
-dim shared is_best_score as integer
+DIM SHARED is_best_score AS INTEGER
 
 LoadBestScore
 
-CONST gravity = .1
+CONST gravity = .2
 DIM SHARED bottom: bottom = 200 - 16
 
 DIM SHARED alive AS INTEGER
@@ -140,13 +139,14 @@ last_pipe_x = 100
 DIM started AS INTEGER
 started = false
 
+' for benchmarking
 DIM dt, last_t
 last_t = TIMER
 
-LINE (0, 0)-(319, 199), 1, BF
-
+' input key
 DIM ink$
 
+' Main game loop
 DO
   ink$ = INKEY$
   
@@ -197,7 +197,7 @@ DO
     END IF
 
 
-    IF pipe_pairs(a).x - player_x < -100 THEN
+    IF pipe_pairs(a).x - player_x < -110 THEN
       ' respawn pipe
       pipe_pairs(a).x = last_pipe_x + pipe_interval
       pipe_pairs(a).y = Rng(30, 92)
@@ -207,7 +207,7 @@ DO
       pipe_pairs(a).top.y = pipe_pairs(a).y - pipe_pairs(a).top.h
 
       pipe_pairs(a).bottom.x = pipe_pairs(a).x
-      pipe_pairs(a).bottom.y = pipe_pairs(a).y + 75
+      pipe_pairs(a).bottom.y = pipe_pairs(a).y + 65
 
       last_pipe_x = pipe_pairs(a).x
       pipe_pairs(a).passed = false
@@ -388,7 +388,7 @@ SUB Jump ()
 
 IF player_y <= 0 THEN EXIT SUB
 
-vy = -2.4
+vy = -3
 
 END SUB
 
@@ -396,10 +396,10 @@ SUB KillPlayer ()
 
 alive = false
 
-if best_score < score THEN
+IF best_score < score THEN
   best_score = score
   is_best_score = true
-end if
+END IF
 
 SaveBestScore
 
@@ -557,10 +557,6 @@ DIM digits(1) AS INTEGER
 DIM length: length = 1
 
 DO
-  
-  ' Unshift digits(), remval MOD 10
-  
-
   digits(UBOUND(digits)) = remval MOD 10
 
   IF remval > 9 THEN
@@ -578,8 +574,22 @@ left = 160 - (6 * UBOUND(digits)) \ 2
 
 DIM a%
 FOR a% = 1 TO UBOUND(digits)
-  DrawRegion2 spr_score(), digits(a%) * 3, 0, 3, 7, left + (a% - 1) * 6, 10
+  DrawRegion2 spr_score(), digits(a%) * 3, 0, 3, 7, left + (a% - 1) * 6, 66
 NEXT
+
+END SUB
+
+SUB ResetGame ()
+
+score = 0
+is_best_score = false
+
+started = false
+alive = true
+
+' Todo: reset player position & the hitbox
+' Todo: reset pipe x
+' Todo: reset pipes: hitboxes
 
 END SUB
 
